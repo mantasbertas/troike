@@ -1,18 +1,19 @@
-from classes import *
+from game_class import Game
 
-deck = Deck()
-print("Deck before shuffling:")
-print(deck.cards)
 
-deck.shuffle()
-print("\nDeck after shuffling:")
-print(deck.cards)
-
-card_drawn = deck.draw_cards()
-print(f"\nCard drawn: {card_drawn}")
-print(f"\nRemaining cards in the deck: {len(deck)}")
-print("\nDeck after drawing:")
-print(deck.cards)
+# deck = Deck()
+# print("Deck before shuffling:")
+# print(deck.cards)
+#
+# deck.shuffle()
+# print("\nDeck after shuffling:")
+# print(deck.cards)
+#
+# card_drawn = deck.draw_cards()
+# print(f"\nCard drawn: {card_drawn}")
+# print(f"\nRemaining cards in the deck: {len(deck)}")
+# print("\nDeck after drawing:")
+# print(deck.cards)
 
 
 def play_game():
@@ -25,5 +26,6 @@ def play_game():
         game.turn()
 
     print("Game over!")
+
 
 play_game()

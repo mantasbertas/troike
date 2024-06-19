@@ -1,67 +1,7 @@
 import random
 
-
-class Card:
-    values = {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10,
-              'Jack': 11, 'Queen': 12, 'King': 13, 'Ace': 14}
-
-    def __init__(self, suite, value):
-        self.suite = suite
-        self.value = value
-        self.rank = Card.values[value]
-
-    def __repr__(self):
-        return f"{self.value} of {self.suite}"
-
-    def __eq__(self, other):
-        if isinstance(other, Card):
-            return self.rank == other.rank
-        return NotImplemented
-
-    def __lt__(self, other):
-        if isinstance(other, Card):
-            return self.rank < other.rank
-        return NotImplemented
-
-    def __le__(self, other):
-        if isinstance(other, Card):
-            return self.rank <= other.rank
-        return NotImplemented
-
-    def __gt__(self, other):
-        if isinstance(other, Card):
-            return self.rank > other.rank
-        return NotImplemented
-
-    def __ge__(self, other):
-        if isinstance(other, Card):
-            return self.rank >= other.rank
-        return NotImplemented
-
-
-class Player:
-    def __init__(self, name):
-        self.name = name
-        self.hand = []
-        self.table_face_down = []
-        self.table_face_up = []
-
-    def receive_initial_cards(self, deck):
-        self.hand = [deck.draw_cards() for _ in range(3)]
-        self.table_face_down = [deck.draw_cards() for _ in range(3)]
-        self.table_face_up = [deck.draw_cards() for _ in range(3)]
-
-    def draw(self, deck):
-        while len(self.hand) < 3 and len(deck) > 0:
-            self.hand.append(deck.draw_cards())
-
-    def play_card(self, card):
-        self.hand.remove(card)
-        return card
-
-    def pick_up_pile(self, pile):
-        self.hand.extend(pile)
-        pile.clear()
+from card import Card
+from player import Player
 
 
 class Deck:
@@ -90,6 +30,7 @@ class Game:
     def __init__(self, *player_names):
         self.players = [Player(name) for name in player_names]
         self.deck = Deck()
+        self.burnt_cards = []
         self.pile = []
         self.turn_id = 0
         self.current_player_idx = 0
@@ -119,6 +60,10 @@ class Game:
                 played_card = current_player.play_card(current_player.hand[card_index])
                 self.pile.append(played_card)
                 print(f"{current_player.name} played {played_card}")
+                self.check_for_4_in_a_row(self.pile)
+
+                if self.was_special_card_played(played_card):
+                    self.special_effect(played_card, current_player)
                 break
             else:
                 print("Illegal play. Try again or pick up the pile.")
@@ -130,8 +75,13 @@ class Game:
         current_player.draw(self.deck)
 
         # Move to the next player
-        self.current_player_idx = (self.current_player_idx + 1) % len(self.players)
-        self.turn_id += 1
+        if current_player.has_cards():
+            self.current_player_idx = (self.current_player_idx + 1) % len(self.players)
+            self.turn_id += 1
+
+    def burn_pile(self):
+        self.burnt_cards.extend(self.pile)
+        self.pile.clear()
 
     def get_player_card_choice(self, player):
         while True:
@@ -150,6 +100,8 @@ class Game:
         if not self.pile:
             return True
         top_card = self.pile[-1]
+        if card.value in card.special_values:
+            return True
         return card >= top_card
 
     def is_game_over(self):
@@ -164,3 +116,37 @@ class Game:
         if not self.pile:  # If the pile is empty, any play is legal
             return False
         return not any(self.is_play_legal(card) for card in player.hand)
+
+    def check_for_4_in_a_row(self, pile):
+        if len(pile) < 4:
+            return
+        if all(pile[-1].value == card.value for card in pile[-4:-1]):
+            print(f"4 in a row! Pile burns and {self.players[self.current_player_idx].name} takes another turn.")
+            self.burn_pile()
+            self.current_player_idx = (self.current_player_idx - 1) % len(self.players)
+
+    def was_special_card_played(self, card):
+        return card.value in card.special_values
+
+    def special_effect(self, card):
+        if card.value == '2':
+            # nothing happens we just allow adding from 2 again
+            print("Next player can play 2 and up.")
+        elif card.value == '3':
+            # we find the index of next player, force him to pick up the pile and increment idx by 1
+
+            print("Next player picks up the stack and skips their turn.")
+            next_player_idx = (self.current_player_idx + 1) % len(self.players)
+            next_player = self.players[next_player_idx]
+            next_player.pick_up_pile(self.pile)
+            self.current_player_idx = (self.current_player_idx + 1) % len(self.players)
+        elif card.value == '5':
+            # we decrement the index by 1 so when turn ends it goes back to the same player
+            print('He takes another turn!.')
+            self.current_player_idx = (self.current_player_idx - 1) % len(self.players)
+        elif card.value == '10':
+            # we burn the pile
+            print("The pile is burned.")
+            self.burn_pile()
+
+
