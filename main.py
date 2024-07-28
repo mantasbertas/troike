@@ -1,4 +1,4 @@
-from game_class import Game
+from game import Game
 
 
 # deck = Deck()
@@ -18,7 +18,7 @@ from game_class import Game
 
 def play_game():
     # player_names = input("Enter player names, separated by space: ").split()
-    player_names = ['Mantas', 'Jonas', 'Martynas']
+    player_names = ['BotMantas', 'BotJonas', 'BotMartynas']
     game = Game(*player_names)
     game.start_game()
 

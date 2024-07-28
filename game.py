@@ -1,34 +1,11 @@
-import random
-
-from card import Card
 from player import Player
-
-
-class Deck:
-    def __init__(self):
-        self.cards = []
-        self.populate_deck()
-
-    def populate_deck(self):
-        suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
-        values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace']
-        for suite in suits:
-            for value in values:
-                self.cards.append(Card(suite, value))
-
-    def shuffle(self):
-        random.shuffle(self.cards)
-
-    def draw_cards(self):
-        return self.cards.pop()
-
-    def __len__(self):
-        return len(self.cards)
+from botplayer import BotPlayer
+from deck import Deck
 
 
 class Game:
     def __init__(self, *player_names):
-        self.players = [Player(name) for name in player_names]
+        self.players = [BotPlayer(name) if name.startswith("Bot") else Player(name) for name in player_names]
         self.deck = Deck()
         self.burnt_cards = []
         self.pile = []
@@ -39,43 +16,65 @@ class Game:
         self.deck.shuffle()
         for player in self.players:
             player.receive_initial_cards(self.deck)
-            print(f"{player.name}'s hand: {player.hand}")
+            print(player)
 
     def turn(self):
         current_player = self.players[self.current_player_idx]
-        print(f"\nIt's {current_player.name}'s turn.")
-        print(f"Your hand: {current_player.hand}")
+        self.print_turn_info(current_player)
+
+        if self.handle_pick_up_pile(current_player):
+            self.finish_turn(current_player)
+            return
 
         while True:
-            if self.should_pick_up_pile(current_player):
-                print(f"{current_player.name} picked up the pile.")
-                current_player.pick_up_pile(self.pile)
+            card_indices = current_player.get_player_card_choice()
+            if self.handle_card_play(current_player, card_indices):
                 break
-            card_index = self.get_player_card_choice(current_player)
-            if card_index == -1:
-                print(f"{current_player.name} picked up the pile.")
-                current_player.pick_up_pile(self.pile)
-                break
-            elif self.is_play_legal(current_player.hand[card_index]):
-                played_card = current_player.play_card(current_player.hand[card_index])
-                self.pile.append(played_card)
-                print(f"{current_player.name} played {played_card}")
-                self.check_for_4_in_a_row(self.pile)
 
-                if self.was_special_card_played(played_card):
-                    self.special_effect(played_card, current_player)
-                break
-            else:
-                print("Illegal play. Try again or pick up the pile.")
+        self.finish_turn(current_player)
 
+    def print_turn_info(self, player):
+        print(f"\nIt's {player.name}'s turn.")
+        print(f"Your hand: {player.hand}")
+
+    def handle_pick_up_pile(self, player):
+        if self.should_pick_up_pile(player):
+            print(f"{player.name} picked up the pile.")
+            player.pick_up_pile(self.pile)
+            return True
+        return False
+
+    def handle_card_play(self, player, card_indices):
+        if card_indices == -1:
+            print(f"{player.name} picked up the pile.")
+            player.pick_up_pile(self.pile)
+            return True
+
+        if self.is_play_legal(player.hand[card_indices[0]]):
+            played_cards = player.play_cards([player.hand[i] for i in card_indices])
+            self.pile.extend(played_cards)
+            print(f"{player.name} played {played_cards}")
+
+            if played_cards[0].value == '9':
+                print(f"Next card is supposed to be lower or equal to 9.")
+
+            self.check_for_4_in_a_row(self.pile)
+
+            if self.was_special_card_played(played_cards[0]):
+                self.special_effect(played_cards[0])
+
+            return True
+
+        print("Illegal play. Try again or pick up the pile.")
+        return False
+
+    def finish_turn(self, player):
         print(f"Stack right now is: {self.pile}")
         print(f"Cards remaining in the deck: {len(self.deck)}")
 
-        # Draw cards if necessary
-        current_player.draw(self.deck)
+        player.draw(self.deck)
 
-        # Move to the next player
-        if current_player.has_cards():
+        if player.has_cards():
             self.current_player_idx = (self.current_player_idx + 1) % len(self.players)
             self.turn_id += 1
 
@@ -83,33 +82,57 @@ class Game:
         self.burnt_cards.extend(self.pile)
         self.pile.clear()
 
+    def burn_top_3s(self):
+        while self.pile and self.pile[-1].value == '3':
+            self.burnt_cards.append(self.pile.pop())
+
     def get_player_card_choice(self, player):
         while True:
             try:
-                choice = int(input(f"Choose a card to play (1-{len(player.hand)}) or 0 to pick up the pile: "))
-                if choice == 0:
-                    return -1  # Indicates the player chose to pick up the pile
-                elif 1 <= choice <= len(player.hand):
-                    return choice - 1
+                choice = input(f"Choose cards to play (e.g., 1,2,3) or 0 to pick up the pile: ")
+                if choice == '0':
+                    return -1  # player chose to pick up the pile
+                indices = [int(i) - 1 for i in choice.split(',')]
+                if self.are_indices_valid(player, indices):
+                    return indices
+
                 else:
                     print("Invalid choice, try again.")
             except ValueError:
                 print("Invalid input, please enter a number.")
 
+    @staticmethod
+    def are_indices_valid(player, indices):
+        """Check if the selected indices are valid (within range and same rank)."""
+        return all(0 <= i < len(player.hand) for i in indices) and \
+            len(set(player.hand[i].value for i in indices)) == 1
+
     def is_play_legal(self, card):
         if not self.pile:
             return True
         top_card = self.pile[-1]
+        # any special card can be played on any card
         if card.value in card.special_values:
             return True
+        # if previous card was special, any card can be played
+        if top_card.values in card.special_values:
+            return True
+        if top_card.value == '9':
+            return card <= top_card
+        # if selected card is higher or equal to top card, it's legal
         return card >= top_card
 
     def is_game_over(self):
         players_with_cards = sum(1 for player in self.players if self.has_cards(player))
-        return players_with_cards <= 1
+        if players_with_cards <= 1:
+            for player in self.players:
+                if player.has_cards():
+                    print(f"Game over, {player.name} is the only one with cards remaining. What a loser.")
+                    return True
+        return False
 
     def has_cards(self, player):
-        return bool(player.hand)
+        return bool(player.hand)  # only need to check hand since we draw before checking
         # return bool(player.hand) or bool(player.table_face_down) or bool(player.table_face_up)
 
     def should_pick_up_pile(self, player):
@@ -134,8 +157,8 @@ class Game:
             print("Next player can play 2 and up.")
         elif card.value == '3':
             # we find the index of next player, force him to pick up the pile and increment idx by 1
-
             print("Next player picks up the stack and skips their turn.")
+            self.burn_top_3s()
             next_player_idx = (self.current_player_idx + 1) % len(self.players)
             next_player = self.players[next_player_idx]
             next_player.pick_up_pile(self.pile)
