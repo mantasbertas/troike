@@ -20,11 +20,15 @@ class Player:
             self.hand.append(deck.draw_cards())
         if len(self.hand) == 0:
             print('No cards left in the deck, picking up face up cards.')
+            print(self.table_face_up)
             self.hand.extend(self.table_face_up)
             self.table_face_up.clear()
         if len(self.hand) == 0 and self.table_face_down:
             print('No cards left in the deck, picking up 1 face down card.')
-            self.hand.append(self.table_face_down.pop())
+            face_down_card = self.table_face_down.pop()
+            print(f'Picked up card: {face_down_card}')
+            print(f'Face down cards remaining: {len(self.table_face_down)}')
+            self.hand.append(face_down_card)
         self.sort_hand()
 
     def play_cards(self, cards):
